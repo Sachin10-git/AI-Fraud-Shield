@@ -16,7 +16,7 @@ export async function predictTransaction(payload) {
 
   const data = await response.json();
 
-  // ✅ SAVE TO LOCAL STORAGE FOR TRACK PAGE
+  // SAVE TO LOCAL STORAGE FOR TRACK PAGE
   const history = JSON.parse(localStorage.getItem("history")) || [];
 
   history.unshift({

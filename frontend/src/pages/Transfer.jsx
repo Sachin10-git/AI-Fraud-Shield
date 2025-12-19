@@ -13,7 +13,6 @@ export default function Transfer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // 🔒 GLOBAL LOCK (this is the real fix)
   const inFlightRef = useRef(false);
 
   const handleChange = (e) => {
@@ -21,7 +20,6 @@ export default function Transfer() {
   };
 
   const analyzeTransaction = async () => {
-    // 🛑 HARD BLOCK — FIRST LINE
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
@@ -29,7 +27,7 @@ export default function Transfer() {
     setError(null);
     setResult(null);
 
-    const txnId = crypto.randomUUID(); // ✅ GUARANTEED UNIQUE
+    const txnId = crypto.randomUUID();
 
     const amount = Number(form.amount);
     const oldbalanceOrg = Number(form.oldbalanceOrg);
@@ -72,7 +70,6 @@ export default function Transfer() {
 
       setResult(transaction);
 
-      // ✅ SINGLE SOURCE OF TRUTH
       const history = JSON.parse(localStorage.getItem("history")) || [];
 
       if (!history.some((h) => h.txn_id === txnId)) {
@@ -84,7 +81,7 @@ export default function Transfer() {
       setError("Transaction analysis failed");
     } finally {
       setLoading(false);
-      inFlightRef.current = false; // 🔓 release lock
+      inFlightRef.current = false;
     }
   };
 

@@ -1,18 +1,5 @@
-# backend/app/ml/predict.py
-
-"""
-Lightweight anomaly prediction module.
-Acts as an unsupervised-style predictor for demo purposes.
-"""
-
 def predict_transaction(payload: dict):
-    """
-    Returns (anomaly_score, predicted_anomaly)
-
-    anomaly_score: float
-    predicted_anomaly: 0 or 1
-    """
-
+    
     amount = payload.get("amount", 0)
     tx_type = payload.get("type", "")
 

@@ -6,7 +6,6 @@ export default function History() {
   useEffect(() => {
     const raw = JSON.parse(localStorage.getItem("history")) || [];
 
-    // ✅ HARD DEDUPLICATION BY txn_id (LATEST WINS)
     const uniqueMap = new Map();
     raw.forEach((txn) => {
       if (txn.txn_id) {

@@ -1,15 +1,3 @@
-# backend/app/core/utils.py
-"""
-Core utility helpers used across the Fraud Shield backend.
-
-Includes:
-- ML model loading (cached)
-- Transaction preprocessing
-- Feature extraction helpers
-- Safe JSON conversion utilities
-- Model version helper
-"""
-
 import os
 import joblib
 import numpy as np
@@ -33,9 +21,9 @@ FEATURE_ORDER = [
     "balance_delta_dest",
 ]
 
-# --------------------------------------------------------
+
 # ML Artifact Loading
-# --------------------------------------------------------
+
 
 def load_artifact(path: str):
     """Load a single ML artifact with error handling."""
@@ -62,15 +50,11 @@ def load_type_encoder():
     return load_artifact(settings.TYPE_ENCODER_PATH)
 
 
-# --------------------------------------------------------
+
 # Feature Engineering
-# --------------------------------------------------------
+
 
 def extract_features(txn: dict):
-    """
-    Extract raw feature list for a transaction before scaling.
-    Input should be dict-like (e.g., Pydantic model .dict()).
-    """
     type_encoder = load_type_encoder()
 
     try:
@@ -97,10 +81,6 @@ def extract_features(txn: dict):
 
 
 def preprocess_transaction(txn_dict):
-    """
-    Convert transaction dict → feature vector → scaled model input.
-    Returns: (X_scaled, raw_feature_list)
-    """
     feat = extract_features(txn_dict)
     scaler = load_scaler()
 
@@ -110,9 +90,8 @@ def preprocess_transaction(txn_dict):
     return X_scaled, feat
 
 
-# --------------------------------------------------------
+
 # Model Version Helper
-# --------------------------------------------------------
 
 def get_model_version():
     """Return model version based on file modification timestamp."""
@@ -123,12 +102,9 @@ def get_model_version():
         return "unknown"
 
 
-# --------------------------------------------------------
+
 # JSON Utility
-# --------------------------------------------------------
 
 def json_safe_features(raw_features):
-    """
-    Convert raw features list into a JSON-friendly dict {feature_name: value}.
-    """
+    
     return {k: float(v) for k, v in zip(FEATURE_ORDER, raw_features)}

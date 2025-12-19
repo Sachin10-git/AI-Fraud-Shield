@@ -17,7 +17,6 @@ ChartJS.register(
   Legend
 );
 
-// 🔒 Dedup helper (txn_id based)
 const deduplicateByTxnId = (transactions) => {
   const map = new Map();
   transactions.forEach((t) => {
@@ -34,7 +33,6 @@ export default function Track() {
   const [normalData, setNormalData] = useState([]);
   const [suspiciousData, setSuspiciousData] = useState([]);
 
-  // Fixed transaction order
   const TRANSACTION_TYPES = [
     "TRANSFER",
     "PAYMENT",
@@ -46,20 +44,16 @@ export default function Track() {
     const loadData = () => {
       const raw = JSON.parse(localStorage.getItem("history")) || [];
 
-      // ✅ HARD DEDUPLICATION
       const unique = deduplicateByTxnId(raw);
 
-      // Optional: limit to recent 20 AFTER dedup
       const latest = unique.slice(0, 20);
       setTransactions(latest);
 
-      // Initialize counters
       const typeMap = {};
       TRANSACTION_TYPES.forEach((t) => {
         typeMap[t] = { normal: 0, suspicious: 0 };
       });
 
-      // Aggregate
       latest.forEach((t) => {
         if (!typeMap[t.type]) return;
 
@@ -108,7 +102,7 @@ export default function Track() {
         Fraud Tracking
       </h1>
 
-      {/* 📊 Bar Graph */}
+      {/* Bar Graph */}
       <div className="bg-gray-800 p-4 rounded mb-6">
         <h2 className="text-lg font-semibold mb-3">
           Transaction Type vs Fraud Distribution
@@ -142,7 +136,7 @@ export default function Track() {
         </div>
       </div>
 
-      {/* 📋 Table */}
+      {/* Table */}
       <div className="bg-gray-800 rounded p-4 overflow-x-auto">
         <table className="w-full table-fixed text-sm">
           <thead className="text-gray-400 border-b border-gray-700">

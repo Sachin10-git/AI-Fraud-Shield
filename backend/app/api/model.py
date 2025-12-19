@@ -1,6 +1,3 @@
-# backend/app/api/model.py
-# FastAPI router for model prediction ONLY (Frontend is source of truth)
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -11,9 +8,8 @@ from pathlib import Path
 
 router = APIRouter(prefix="/api/model", tags=["model"])
 
-# ----------------------
 # Paths to ML artifacts
-# ----------------------
+
 HERE = Path(__file__).resolve().parent
 ML_DIR = (HERE / ".." / "ml").resolve()
 
@@ -21,9 +17,9 @@ MODEL_PATH = str(ML_DIR / "model_if.pkl")
 SCALER_PATH = str(ML_DIR / "scaler.pkl")
 TYPE_ENCODER_PATH = str(ML_DIR / "type_encoder.pkl")
 
-# ----------------------
+
 # Safe loader
-# ----------------------
+
 def safe_load(path: str):
     return joblib.load(path) if os.path.exists(path) else None
 
@@ -31,9 +27,9 @@ _model = safe_load(MODEL_PATH)
 _scaler = safe_load(SCALER_PATH)
 _type_encoder = safe_load(TYPE_ENCODER_PATH)
 
-# ----------------------
+
 # Schemas
-# ----------------------
+
 class ModelPredictIn(BaseModel):
     txn_id: Optional[str]
     step: Optional[float] = None
@@ -59,10 +55,10 @@ class ModelInfoOut(BaseModel):
     type_encoder_loaded: bool
     model_version: Optional[str]
 
-# ----------------------
+
 # Constants
-# ----------------------
-ANOMALY_THRESHOLD = 0.0  # FINAL decision threshold
+
+ANOMALY_THRESHOLD = 0.0  
 
 FEATURE_ORDER = [
     "amount",
@@ -76,9 +72,9 @@ FEATURE_ORDER = [
     "balance_delta_dest",
 ]
 
-# ----------------------
+
 # Helpers
-# ----------------------
+
 def get_model_version():
     try:
         return Path(MODEL_PATH).name + "@" + str(int(os.path.getmtime(MODEL_PATH)))
@@ -113,9 +109,9 @@ def preprocess_record(rec: ModelPredictIn):
 
     return _scaler.transform(X), features
 
-# ----------------------
+
 # Endpoints
-# ----------------------
+
 @router.get("/info", response_model=ModelInfoOut)
 def model_info():
     return ModelInfoOut(
