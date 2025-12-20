@@ -14,20 +14,5 @@ export async function predictTransaction(payload) {
     throw new Error(error || "Prediction failed");
   }
 
-  const data = await response.json();
-
-  // SAVE TO LOCAL STORAGE FOR TRACK PAGE
-  const history = JSON.parse(localStorage.getItem("history")) || [];
-
-  history.unshift({
-    type: payload.type,
-    amount: payload.amount,
-    anomaly_score: data.anomaly_score,
-    predicted_anomaly: data.predicted_anomaly,
-    timestamp: new Date().toISOString(),
-  });
-
-  localStorage.setItem("history", JSON.stringify(history));
-
-  return data;
+  return await response.json();
 }
