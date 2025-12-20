@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.model import router as model_router
 
 
+# FastAPI App
+
 app = FastAPI(
     title="Fraud Shield",
     description="Stateless ML Anomaly Detection API",
@@ -12,21 +14,27 @@ app = FastAPI(
 )
 
 
-# ✅ CORS FIX (ALLOW FRONTEND FROM ANY DOMAIN)
+# CORS (Frontend Access)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # ← THIS FIXES VERCEL
-    allow_credentials=False,    # must be False when using "*"
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
 # Routers
+
 app.include_router(model_router)
 
 
 # Health Check
+
 @app.get("/api/health")
 def health():
     return {
@@ -36,3 +44,13 @@ def health():
     }
 
 
+# Local run
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    )
