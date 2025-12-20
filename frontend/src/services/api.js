@@ -1,4 +1,4 @@
-const BASE_URL = "http://127.0.0.1:8000";
+const BASE_URL = "https://ai-fraud-shield-backend.onrender.com";
 
 export async function predictTransaction(payload) {
   const response = await fetch(`${BASE_URL}/api/model/predict`, {
