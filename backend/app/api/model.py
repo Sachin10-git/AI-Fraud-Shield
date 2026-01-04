@@ -8,7 +8,7 @@ from pathlib import Path
 
 router = APIRouter(prefix="/api/model", tags=["model"])
 
-# ------------------ Paths ------------------
+# Paths
 
 HERE = Path(__file__).resolve().parent
 ML_DIR = (HERE / ".." / "ml").resolve()
@@ -17,7 +17,7 @@ MODEL_PATH = str(ML_DIR / "model_if.pkl")
 SCALER_PATH = str(ML_DIR / "scaler.pkl")
 TYPE_ENCODER_PATH = str(ML_DIR / "type_encoder.pkl")
 
-# ------------------ Load -------------------
+# Load 
 
 def safe_load(path: str):
     return joblib.load(path) if os.path.exists(path) else None
@@ -26,7 +26,7 @@ _model = safe_load(MODEL_PATH)
 _scaler = safe_load(SCALER_PATH)
 _type_encoder = safe_load(TYPE_ENCODER_PATH)
 
-# ------------------ Schemas ----------------
+# Schemas 
 
 class ModelPredictIn(BaseModel):
     txn_id: Optional[str]
@@ -47,11 +47,11 @@ class ModelPredictOut(BaseModel):
     model_version: str
     details: Dict[str, Any]
 
-# ------------------ Constants ----------------
+# Constants
 
 ANOMALY_THRESHOLD = 0.6  # FINAL threshold
 
-# ------------------ Preprocessing ----------------
+# Preprocessing
 
 def preprocess(txn: ModelPredictIn):
     try:
@@ -79,9 +79,7 @@ def preprocess(txn: ModelPredictIn):
 
     return _scaler.transform(X)
 
-# ------------------ RULE ENGINE ----------------
-
-def rule_based_anomaly(txn: ModelPredictIn) -> Dict[str, bool]:
+def based_anomaly(txn: ModelPredictIn) -> Dict[str, bool]:
     sender_expected = txn.oldbalanceOrg - txn.amount
     receiver_expected = txn.oldbalanceDest + txn.amount
 
@@ -102,30 +100,30 @@ def rule_based_anomaly(txn: ModelPredictIn) -> Dict[str, bool]:
         "money_flow_mismatch": money_flow_mismatch,
     }
 
-# ------------------ Endpoint ------------------
+# Endpoint
 
 @router.post("/predict", response_model=ModelPredictOut)
 def predict(txn: ModelPredictIn):
     if _model is None or _scaler is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    # ---------- ML SCORE ----------
+    # ML SCORE
     Xs = preprocess(txn)
     raw_score = float(_model.decision_function(Xs)[0])
     ml_score = -raw_score  # higher = more anomalous
 
-    # ---------- RULE SCORE ----------
-    rules = rule_based_anomaly(txn)
+    # SCORE
+    semantic = based_anomaly(txn)
 
-    rule_score = 0.0
-    RULE_WEIGHT = 0.7
+    r_score = 0.0
+    R_WEIGHT = 0.7
 
-    for triggered in rules.values():
+    for triggered in semantic.values():
         if triggered:
-            rule_score += RULE_WEIGHT
+            r_score += R_WEIGHT
 
-    # ---------- FINAL SCORE ----------
-    anomaly_score = ml_score + rule_score
+    # FINAL SCORE
+    anomaly_score = ml_score + r_score
 
     predicted_anomaly = 1 if anomaly_score >= ANOMALY_THRESHOLD else 0
 
@@ -136,8 +134,8 @@ def predict(txn: ModelPredictIn):
         model_version="hybrid-rule-ml-v1",
         details={
             "ml_score": round(ml_score, 4),
-            "rule_score": round(rule_score, 4),
-            "rules_triggered": rules,
+            "r_score": round(r_score, 4),
+            "rules_triggered": semantic,
             "threshold": ANOMALY_THRESHOLD
         }
     )
