@@ -125,8 +125,9 @@ http://localhost:5173
 ```
 
 ## 🔮 Future Improvements
-- Database integration
 - Use of Blockchain & advanced ML models.
 - Authentication & roles
 - Fraud confirmation workflow
+- Explainable AI
+- Public Deployment
   
