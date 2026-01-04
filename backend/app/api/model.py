@@ -8,7 +8,7 @@ from pathlib import Path
 
 router = APIRouter(prefix="/api/model", tags=["model"])
 
-# Paths to ML artifacts
+# ------------------ Paths ------------------
 
 HERE = Path(__file__).resolve().parent
 ML_DIR = (HERE / ".." / "ml").resolve()
@@ -17,8 +17,7 @@ MODEL_PATH = str(ML_DIR / "model_if.pkl")
 SCALER_PATH = str(ML_DIR / "scaler.pkl")
 TYPE_ENCODER_PATH = str(ML_DIR / "type_encoder.pkl")
 
-
-# Safe loader
+# ------------------ Load -------------------
 
 def safe_load(path: str):
     return joblib.load(path) if os.path.exists(path) else None
@@ -27,122 +26,118 @@ _model = safe_load(MODEL_PATH)
 _scaler = safe_load(SCALER_PATH)
 _type_encoder = safe_load(TYPE_ENCODER_PATH)
 
-
-# Schemas
+# ------------------ Schemas ----------------
 
 class ModelPredictIn(BaseModel):
     txn_id: Optional[str]
-    step: Optional[float] = None
+    step: Optional[float]
     type: str
     amount: float
     oldbalanceOrg: float
     newbalanceOrg: float
     oldbalanceDest: float
     newbalanceDest: float
-    origin: Optional[str] = None
-    destination: Optional[str] = None
+    origin: Optional[str]
+    destination: Optional[str]
 
 class ModelPredictOut(BaseModel):
     txn_id: Optional[str]
     anomaly_score: float
     predicted_anomaly: int
-    model_version: Optional[str]
-    details: Optional[Dict[str, Any]] = None
+    model_version: str
+    details: Dict[str, Any]
 
-class ModelInfoOut(BaseModel):
-    model_loaded: bool
-    scaler_loaded: bool
-    type_encoder_loaded: bool
-    model_version: Optional[str]
+# ------------------ Constants ----------------
 
+ANOMALY_THRESHOLD = 0.6  # FINAL threshold
 
-# Constants
+# ------------------ Preprocessing ----------------
 
-ANOMALY_THRESHOLD = 0.0  
-
-FEATURE_ORDER = [
-    "amount",
-    "oldbalanceOrg",
-    "newbalanceOrg",
-    "oldbalanceDest",
-    "newbalanceDest",
-    "step",
-    "type_code",
-    "balance_delta_org",
-    "balance_delta_dest",
-]
-
-
-# Helpers
-
-def get_model_version():
+def preprocess(txn: ModelPredictIn):
     try:
-        return Path(MODEL_PATH).name + "@" + str(int(os.path.getmtime(MODEL_PATH)))
-    except Exception:
-        return None
-
-def preprocess_record(rec: ModelPredictIn):
-    try:
-        type_code = int(_type_encoder.transform([rec.type])[0]) if _type_encoder else 0
-    except Exception:
+        type_code = int(_type_encoder.transform([txn.type])[0]) if _type_encoder else 0
+    except:
         type_code = 0
 
-    bal_org = rec.newbalanceOrg - rec.oldbalanceOrg
-    bal_dest = rec.newbalanceDest - rec.oldbalanceDest
+    bal_org_delta = txn.newbalanceOrg - txn.oldbalanceOrg
+    bal_dest_delta = txn.newbalanceDest - txn.oldbalanceDest
 
-    features = [
-        rec.amount,
-        rec.oldbalanceOrg,
-        rec.newbalanceOrg,
-        rec.oldbalanceDest,
-        rec.newbalanceDest,
-        rec.step or 0.0,
+    X = np.array([[  
+        txn.amount,
+        txn.oldbalanceOrg,
+        txn.newbalanceOrg,
+        txn.oldbalanceDest,
+        txn.newbalanceDest,
+        txn.step or 0.0,
         type_code,
-        bal_org,
-        bal_dest,
-    ]
-
-    X = np.array(features, dtype=float).reshape(1, -1)
+        bal_org_delta,
+        bal_dest_delta
+    ]])
 
     if _scaler is None:
         raise RuntimeError("Scaler not loaded")
 
-    return _scaler.transform(X), features
+    return _scaler.transform(X)
 
+# ------------------ RULE ENGINE ----------------
 
-# Endpoints
+def rule_based_anomaly(txn: ModelPredictIn) -> Dict[str, bool]:
+    sender_expected = txn.oldbalanceOrg - txn.amount
+    receiver_expected = txn.oldbalanceDest + txn.amount
 
-@router.get("/info", response_model=ModelInfoOut)
-def model_info():
-    return ModelInfoOut(
-        model_loaded=_model is not None,
-        scaler_loaded=_scaler is not None,
-        type_encoder_loaded=_type_encoder is not None,
-        model_version=get_model_version(),
-    )
+    sender_mismatch = not np.isclose(txn.newbalanceOrg, sender_expected)
+    receiver_mismatch = not np.isclose(txn.newbalanceDest, receiver_expected)
+
+    negative_balance = txn.newbalanceOrg < 0 or txn.newbalanceDest < 0
+
+    money_flow_mismatch = abs(
+        (txn.oldbalanceOrg - txn.newbalanceOrg) -
+        (txn.newbalanceDest - txn.oldbalanceDest)
+    ) > 1e-6
+
+    return {
+        "sender_balance_mismatch": sender_mismatch,
+        "receiver_balance_mismatch": receiver_mismatch,
+        "negative_balance": negative_balance,
+        "money_flow_mismatch": money_flow_mismatch,
+    }
+
+# ------------------ Endpoint ------------------
 
 @router.post("/predict", response_model=ModelPredictOut)
-def predict(item: ModelPredictIn):
+def predict(txn: ModelPredictIn):
     if _model is None or _scaler is None:
-        raise HTTPException(status_code=503, detail="Model artifacts not loaded")
+        raise HTTPException(status_code=503, detail="Model not loaded")
 
-    # Preprocess
-    Xs, _ = preprocess_record(item)
+    # ---------- ML SCORE ----------
+    Xs = preprocess(txn)
+    raw_score = float(_model.decision_function(Xs)[0])
+    ml_score = -raw_score  # higher = more anomalous
 
-    # Isolation Forest score
-    raw_decision = float(_model.decision_function(Xs)[0])
-    anomaly_score = -raw_decision  # higher = more suspicious
+    # ---------- RULE SCORE ----------
+    rules = rule_based_anomaly(txn)
 
-    # Score-based classification
-    predicted_anomaly = 1 if anomaly_score > ANOMALY_THRESHOLD else 0
+    rule_score = 0.0
+    RULE_WEIGHT = 0.7
+
+    for triggered in rules.values():
+        if triggered:
+            rule_score += RULE_WEIGHT
+
+    # ---------- FINAL SCORE ----------
+    anomaly_score = ml_score + rule_score
+
+    predicted_anomaly = 1 if anomaly_score >= ANOMALY_THRESHOLD else 0
 
     return ModelPredictOut(
-        txn_id=item.txn_id,
-        anomaly_score=anomaly_score,
+        txn_id=txn.txn_id,
+        anomaly_score=round(anomaly_score, 4),
         predicted_anomaly=predicted_anomaly,
-        model_version=get_model_version(),
+        model_version="hybrid-rule-ml-v1",
         details={
-            "threshold": ANOMALY_THRESHOLD,
-            "rule": "anomaly_score > 0 → Suspicious",
-        },
+            "ml_score": round(ml_score, 4),
+            "rule_score": round(rule_score, 4),
+            "rules_triggered": rules,
+            "threshold": ANOMALY_THRESHOLD
+        }
     )

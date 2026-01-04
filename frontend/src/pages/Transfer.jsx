@@ -6,7 +6,9 @@ export default function Transfer() {
     type: "TRANSFER",
     amount: "",
     oldbalanceOrg: "",
+    newbalanceOrg: "",
     oldbalanceDest: "",
+    newbalanceDest: "",
   });
 
   const [result, setResult] = useState(null);
@@ -27,34 +29,15 @@ export default function Transfer() {
     setError(null);
     setResult(null);
 
-    const txnId = crypto.randomUUID();
-
-    const amount = Number(form.amount);
-    const oldbalanceOrg = Number(form.oldbalanceOrg);
-    const oldbalanceDest = Number(form.oldbalanceDest || 0);
-
-    if (amount <= 0 || oldbalanceOrg <= 0) {
-      setError("Amount and balance must be positive");
-      setLoading(false);
-      inFlightRef.current = false;
-      return;
-    }
-
     const payload = {
-      txn_id: txnId,
+      txn_id: crypto.randomUUID(),
       step: Math.floor(Date.now() / 1000),
       type: form.type,
-      amount,
-      oldbalanceOrg,
-      newbalanceOrg:
-        form.type === "CASH_IN"
-          ? oldbalanceOrg + amount
-          : oldbalanceOrg - amount,
-      oldbalanceDest,
-      newbalanceDest:
-        form.type === "CASH_IN"
-          ? oldbalanceDest - amount
-          : oldbalanceDest + amount,
+      amount: Number(form.amount),
+      oldbalanceOrg: Number(form.oldbalanceOrg),
+      newbalanceOrg: Number(form.newbalanceOrg),
+      oldbalanceDest: Number(form.oldbalanceDest),
+      newbalanceDest: Number(form.newbalanceDest),
       origin: "USER",
       destination: "MERCHANT",
     };
@@ -62,22 +45,25 @@ export default function Transfer() {
     try {
       const res = await predictTransaction(payload);
 
+      // ✅ BUILD FINAL TRANSACTION OBJECT
       const transaction = {
         ...payload,
-        ...res,
+        anomaly_score: res.anomaly_score,
+        predicted_anomaly: res.predicted_anomaly,
         timestamp: new Date().toISOString(),
       };
 
-      setResult(transaction);
-
+      // ✅ SAVE TO LOCAL STORAGE (THIS WAS MISSING)
       const history = JSON.parse(localStorage.getItem("history")) || [];
 
-      if (!history.some((h) => h.txn_id === txnId)) {
+      // prevent duplicates
+      if (!history.some((t) => t.txn_id === transaction.txn_id)) {
         history.unshift(transaction);
         localStorage.setItem("history", JSON.stringify(history));
       }
 
-    } catch (err) {
+      setResult(transaction);
+    } catch {
       setError("Transaction analysis failed");
     } finally {
       setLoading(false);
@@ -86,16 +72,10 @@ export default function Transfer() {
   };
 
   return (
-    <div className="max-w-md bg-gray-800 p-6 rounded-xl shadow-lg">
-      <h2 className="text-2xl font-semibold mb-6">
-        Transfer / Receive
+    <div className="max-w-lg mx-auto bg-gray-800 p-6 rounded-xl shadow-lg">
+      <h2 className="text-2xl font-semibold mb-6 text-center">
+        Transaction Analysis
       </h2>
-
-      {result?.anomaly_score > 0 && (
-        <div className="bg-red-900 text-red-300 p-3 rounded mb-4">
-          ⚠️ Suspicious transaction detected
-        </div>
-      )}
 
       {error && (
         <div className="bg-red-900 text-red-300 p-3 rounded mb-4">
@@ -103,7 +83,11 @@ export default function Transfer() {
         </div>
       )}
 
-      <div className="space-y-4">
+      {/* Transaction Type */}
+      <div className="mb-4">
+        <label className="block text-sm text-gray-400 mb-1">
+          Transaction Type
+        </label>
         <select
           name="type"
           value={form.type}
@@ -115,59 +99,92 @@ export default function Transfer() {
           <option>CASH_OUT</option>
           <option>CASH_IN</option>
         </select>
+      </div>
 
+      {/* Amount */}
+      <div className="mb-6">
+        <label className="block text-sm text-gray-400 mb-1">
+          Transaction Amount (₹)
+        </label>
         <input
           name="amount"
-          placeholder="Amount (₹)"
           onChange={handleChange}
           className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
         />
-
-        <input
-          name="oldbalanceOrg"
-          placeholder="Your Balance"
-          onChange={handleChange}
-          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
-        />
-
-        <input
-          name="oldbalanceDest"
-          placeholder="Other Party Balance"
-          onChange={handleChange}
-          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
-        />
-
-        <button
-          onClick={analyzeTransaction}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 py-2 rounded font-semibold w-full"
-        >
-          {loading ? "Analyzing..." : "Analyze Transaction"}
-        </button>
-
-        {result && (
-          <div className="mt-4 text-center">
-            <p
-              className={`font-bold ${
-                result.anomaly_score > 0
-                  ? "text-red-400"
-                  : "text-green-400"
-              }`}
-            >
-              {result.anomaly_score > 0
-                ? "Suspicious Transaction"
-                : "Normal Transaction"}
-            </p>
-
-            <p className="text-sm text-gray-400 mt-1">
-              Anomaly Score:{" "}
-              <span className="font-semibold">
-                {result.anomaly_score.toFixed(4)}
-              </span>
-            </p>
-          </div>
-        )}
       </div>
+
+      {/* Sender */}
+      <div className="border border-gray-700 rounded-lg p-4 mb-5">
+        <h3 className="text-sm font-semibold text-gray-300 mb-3">
+          Sender Account
+        </h3>
+        <div className="space-y-3">
+          <input
+            name="oldbalanceOrg"
+            placeholder="Old Balance (Sender)"
+            onChange={handleChange}
+            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
+          />
+          <input
+            name="newbalanceOrg"
+            placeholder="New Balance (Sender)"
+            onChange={handleChange}
+            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
+          />
+        </div>
+      </div>
+
+      {/* Receiver */}
+      <div className="border border-gray-700 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-semibold text-gray-300 mb-3">
+          Receiver Account
+        </h3>
+        <div className="space-y-3">
+          <input
+            name="oldbalanceDest"
+            placeholder="Old Balance (Receiver)"
+            onChange={handleChange}
+            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
+          />
+          <input
+            name="newbalanceDest"
+            placeholder="New Balance (Receiver)"
+            onChange={handleChange}
+            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2"
+          />
+        </div>
+      </div>
+
+      <button
+        onClick={analyzeTransaction}
+        disabled={loading}
+        className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded font-semibold"
+      >
+        {loading ? "Analyzing..." : "Analyze Transaction"}
+      </button>
+
+      {result && (
+        <div className="mt-6 text-center">
+          <p
+            className={`font-bold text-lg ${
+              result.anomaly_score > 0
+                ? "text-red-400"
+                : "text-green-400"
+            }`}
+          >
+            {result.anomaly_score > 0
+              ? "Suspicious Transaction"
+              : "Normal Transaction"}
+          </p>
+
+          <p className="text-sm text-gray-400 mt-1">
+            Anomaly Score:{" "}
+            <span className="font-semibold">
+              {result.anomaly_score.toFixed(4)}
+            </span>
+          </p>
+        </div>
+      )}
     </div>
   );
 }
